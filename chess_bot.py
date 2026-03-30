@@ -38,8 +38,8 @@ from telegram.ext import (
 #  الإعدادات
 # ============================================================
 BOT_TOKEN    = os.environ.get("BOT_TOKEN", "8693975581:AAGGEbsizrkMss9tLEcA1Z1b2j6Eh92zlus")
-BOT_USERNAME = os.environ.get("BOT_USERNAME", "اسم_البوت")   # بدون @
-WEBAPP_URL   = os.environ.get("WEBAPP_URL", "https://your-app.replit.app")
+BOT_USERNAME = os.environ.get("BOT_USERNAME", "shetrnj_bot")
+WEBAPP_URL   = os.environ.get("WEBAPP_URL", "https://chess-d12v.onrender.com")
 PORT         = int(os.environ.get("PORT", 8080))
 
 logging.basicConfig(
