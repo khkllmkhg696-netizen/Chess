@@ -7,14 +7,15 @@
 
 الإعداد:
 1. شغّل الملف: python chess_bot.py
-2. اضبط متغير البيئة WEBAPP_URL بعنوان موقعك (مثل Replit)
-   مثال: export WEBAPP_URL=https://yourname.replit.app
+2. اضبط متغيرات البيئة:
+   export BOT_TOKEN=توكن_البوت
+   export WEBAPP_URL=https://yourname.replit.app
+   export BOT_USERNAME=اسم_البوت_بدون_@
 3. فعّل الـ Inline Mode في @BotFather
 4. لـ UptimeRobot: استخدم رابط / أو /ping
 """
 
 import os
-import json
 import threading
 import uuid
 import time
@@ -36,9 +37,10 @@ from telegram.ext import (
 # ============================================================
 #  الإعدادات
 # ============================================================
-BOT_TOKEN  = "8693975581:AAGGEbsizrkMss9tLEcA1Z1b2j6Eh92zlus"
-WEBAPP_URL = os.environ.get("WEBAPP_URL", "https://your-app.replit.app")
-PORT       = int(os.environ.get("PORT", 8080))
+BOT_TOKEN    = os.environ.get("BOT_TOKEN", "8693975581:AAGGEbsizrkMss9tLEcA1Z1b2j6Eh92zlus")
+BOT_USERNAME = os.environ.get("BOT_USERNAME", "اسم_البوت")   # بدون @
+WEBAPP_URL   = os.environ.get("WEBAPP_URL", "https://your-app.replit.app")
+PORT         = int(os.environ.get("PORT", 8080))
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -68,7 +70,7 @@ def create_game(creator_id: str, creator_name: str) -> str:
         "id":         gid,
         "board":      new_board(),
         "turn":       "w",
-        "status":     "waiting",   # waiting | playing | check | checkmate | stalemate
+        "status":     "waiting",
         "players":    {"w": creator_id, "b": None},
         "names":      {"w": creator_name, "b": "؟"},
         "en_passant": None,
@@ -81,11 +83,10 @@ def create_game(creator_id: str, creator_name: str) -> str:
 
 
 # ============================================================
-#  منطق حركات الشطرنج (Python - للتحقق من صحة الحركات)
+#  منطق حركات الشطرنج
 # ============================================================
 
 def _raw_moves(board, r, c, ep=None):
-    """إرجاع جميع الحركات المحتملة بدون التحقق من الكشف."""
     p = board[r][c]
     if not p:
         return []
@@ -140,7 +141,6 @@ def _raw_moves(board, r, c, ep=None):
 
 
 def _in_check(board, col):
-    """هل ملك اللون col في كشف؟"""
     king_pos = None
     for r in range(8):
         for c in range(8):
@@ -159,7 +159,6 @@ def _in_check(board, col):
 
 
 def legal_moves(board, r, c, ep=None):
-    """إرجاع الحركات القانونية (بعد التحقق من الكشف)."""
     p = board[r][c]
     if not p:
         return []
@@ -186,7 +185,6 @@ def _has_any_moves(board, col, ep=None):
 
 
 def apply_move(game, fr, fc, tr, tc):
-    """تطبيق الحركة على اللعبة. يُرجع رسالة خطأ أو None عند النجاح."""
     board = game["board"]
     p     = board[fr][fc]
     if not p:
@@ -363,7 +361,6 @@ let selR = -1, selC = -1;
 let movable  = [];
 let lastFrom = null, lastTo = null;
 
-// ─── Polling ───────────────────────────────────────────────
 async function poll() {
   try {
     const r = await fetch(
@@ -393,7 +390,6 @@ async function poll() {
   } catch(e) {}
 }
 
-// ─── Render Board ──────────────────────────────────────────
 function render() {
   if (!state) return;
   const el   = document.getElementById("board");
@@ -415,7 +411,6 @@ function render() {
       if (lastFrom && lastFrom[0]===r && lastFrom[1]===c) div.classList.add("last-from");
       if (lastTo   && lastTo[0]===r   && lastTo[1]===c)   div.classList.add("last-to");
 
-      // نقاط الحركات المتاحة
       const isMove = movable.some(m => m[0]===r && m[1]===c);
       if (isMove) {
         const mark = document.createElement("div");
@@ -440,7 +435,6 @@ function render() {
   document.getElementById("opp-name").textContent = state.names[oppColor || "b"] || "اللاعب الثاني";
 }
 
-// ─── Click Handler ─────────────────────────────────────────
 function onClick(e) {
   const div = e.currentTarget;
   const r   = parseInt(div.dataset.r);
@@ -450,7 +444,6 @@ function onClick(e) {
   const active = state.status === "playing" || state.status === "check";
   if (!active || state.turn !== myColor) return;
 
-  // هل الخلية موجودة في قائمة الحركات المتاحة؟
   if (selR >= 0 && movable.some(m => m[0]===r && m[1]===c)) {
     doMove(selR, selC, r, c);
     return;
@@ -459,7 +452,6 @@ function onClick(e) {
   const piece = state.board[r][c];
   if (piece && piece[0] === myColor) {
     selR = r; selC = c;
-    // جلب الحركات من الخادم
     fetch(`/api/game/${gameId}/moves?r=${r}&c=${c}`)
       .then(x => x.json())
       .then(d => { movable = d.moves || []; render(); });
@@ -469,7 +461,6 @@ function onClick(e) {
   }
 }
 
-// ─── Make Move ─────────────────────────────────────────────
 async function doMove(fr, fc, tr, tc) {
   selR = -1; selC = -1; movable = [];
   try {
@@ -486,7 +477,6 @@ async function doMove(fr, fc, tr, tc) {
   } catch(e) {}
 }
 
-// ─── Status Text ───────────────────────────────────────────
 function setStatus(txt, cls) {
   const el = document.getElementById("status");
   el.textContent = txt; el.className = cls || "";
@@ -510,7 +500,6 @@ function updateStatus() {
   }
 }
 
-// ─── Timers ────────────────────────────────────────────────
 function fmt(s) {
   const m  = Math.floor(Math.max(0,s)/60);
   const sc = Math.floor(Math.max(0,s) % 60);
@@ -533,7 +522,6 @@ function updateTimers() {
   }
 }
 
-// ─── Start ─────────────────────────────────────────────────
 poll();
 setInterval(poll, 1500);
 </script>
@@ -549,13 +537,11 @@ flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
-    """نقطة نهاية UptimeRobot الرئيسية."""
     return jsonify({"status": "ok", "message": "بوت الشطرنج يعمل! ♟️"})
 
 
 @flask_app.route("/ping")
 def ping():
-    """نقطة نهاية UptimeRobot البديلة."""
     return "OK", 200
 
 
@@ -578,7 +564,6 @@ def api_get_game(gid):
     pid   = request.args.get("player_id", "")
     pname = request.args.get("player_name", "لاعب")
 
-    # انضمام اللاعب الثاني تلقائياً
     if pid and game["status"] == "waiting":
         if pid != game["players"]["w"] and not game["players"]["b"]:
             game["players"]["b"] = pid
@@ -638,7 +623,59 @@ def api_make_move(gid):
 # ============================================================
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """رسالة البداية عند كتابة /start"""
+    """
+    معالجة /start
+    - إذا جاء مع باراميتر (مثل /start GAMEID) يعني شخص ضغط زر الدعوة،
+      فيُفتح له رسالة مع زر WebApp يحمل هويته الخاصة.
+    - بدون باراميتر: رسالة ترحيب عادية.
+    """
+    user = update.effective_user
+    args = context.args
+
+    if args:
+        gid = args[0].upper()
+
+        if gid not in games:
+            await update.message.reply_text(
+                "⚠️ انتهت صلاحية هذه الدعوة أو أن اللعبة لم تعد موجودة.\n\n"
+                "يمكنك إنشاء لعبة جديدة بالضغط على /start",
+            )
+            return
+
+        game = games[gid]
+
+        if game["players"]["b"] and game["players"]["b"] != str(user.id):
+            await update.message.reply_text(
+                "⚠️ اللعبة ممتلئة بالفعل!\n\n"
+                "اضغط /start لإنشاء لعبة جديدة."
+            )
+            return
+
+        game_url = (
+            f"{WEBAPP_URL}/chess"
+            f"?game_id={gid}"
+            f"&player_id={user.id}"
+            f"&player_name={user.first_name}"
+        )
+
+        creator_name = game["names"]["w"]
+        kb = [[
+            InlineKeyboardButton(
+                "♟️ ادخل اللعبة الآن",
+                web_app=WebAppInfo(url=game_url),
+            )
+        ]]
+        await update.message.reply_text(
+            f"♟️ *دعوة شطرنج!*\n\n"
+            f"👤 *{creator_name}* يدعوك للعب شطرنج\n"
+            f"⏱ الوقت: دقيقة لكل لاعب\n"
+            f"🎲 الألوان: عشوائية\n\n"
+            f"اضغط الزر أدناه للدخول مباشرة! 👇",
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode="Markdown",
+        )
+        return
+
     kb = [[InlineKeyboardButton("🎮 العب مع صديق", callback_data="new_game")]]
     await update.message.reply_text(
         "♟️ *أهلاً وسهلاً في بوت الشطرنج!*\n\n"
@@ -646,7 +683,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📌 *طريقة اللعب:*\n"
         "١ ─ اضغط «العب مع صديق»\n"
         "٢ ─ اختر الشخص أو المجموعة التي تريد دعوتها\n"
-        "٣ ─ اضغط «انضم للعبة» وابدأوا المتعة!\n\n"
+        "٣ ─ يصله رابط الدعوة، يضغطه ويدخل اللعبة مباشرة!\n\n"
         "🏆 القطعة البيضاء تبدأ أولاً\n"
         "⏱ وقت كل لاعب: دقيقة واحدة",
         reply_markup=InlineKeyboardMarkup(kb),
@@ -659,15 +696,13 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
 
-    if q.data == "new_game":
+    if q.data in ("new_game", "play_again"):
         user = q.from_user
         gid  = create_game(str(user.id), user.first_name)
 
-        # زر فتح اختيار المحادثة (Chat Picker)
-        # عند الضغط يفتح قائمة المحادثات والأصدقاء
         kb = [[
             InlineKeyboardButton(
-                "📨 اختر صديقاً أو مجموعة للعب",
+                "📨 شارك الدعوة مع صديق",
                 switch_inline_query_chosen_chat=SwitchInlineQueryChosenChat(
                     query=gid,
                     allow_user_chats=True,
@@ -676,35 +711,22 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     allow_channel_chats=False,
                 ),
             )
-        ]]
-        await q.message.reply_text(
-            f"🎮 *تم إنشاء لعبة جديدة!*\n\n"
-            f"👤 المنشئ: {user.first_name}\n"
-            f"⏱ الوقت: دقيقة لكل لاعب\n"
-            f"🎲 الألوان: عشوائية\n\n"
-            f"📩 اضغط الزر أدناه لاختيار صديق أو مجموعة لإرسال الدعوة إليهم!",
-            reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode="Markdown",
-        )
-
-    elif q.data == "play_again":
-        user = q.from_user
-        gid  = create_game(str(user.id), user.first_name)
-        kb   = [[
+        ], [
             InlineKeyboardButton(
-                "📨 اختر صديقاً أو مجموعة للعب",
-                switch_inline_query_chosen_chat=SwitchInlineQueryChosenChat(
-                    query=gid,
-                    allow_user_chats=True,
-                    allow_bot_chats=False,
-                    allow_group_chats=True,
-                    allow_channel_chats=False,
+                "▶️ افتح لعبتي أنا",
+                web_app=WebAppInfo(
+                    url=f"{WEBAPP_URL}/chess?game_id={gid}&player_id={user.id}&player_name={user.first_name}"
                 ),
             )
         ]]
+
+        label = "🔄 *لعبة جديدة!*" if q.data == "play_again" else "🎮 *تم إنشاء لعبة جديدة!*"
         await q.message.reply_text(
-            f"🔄 *لعبة جديدة!*\n\n"
-            f"📩 اختر من تريد اللعب معه:",
+            f"{label}\n\n"
+            f"👤 المنشئ: {user.first_name}\n"
+            f"⏱ الوقت: دقيقة لكل لاعب\n\n"
+            f"📩 اضغط «شارك الدعوة» لإرسالها لصديقك،\n"
+            f"أو افتح لعبتك أنت وانتظره!",
             reply_markup=InlineKeyboardMarkup(kb),
             parse_mode="Markdown",
         )
@@ -713,43 +735,36 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     معالجة الـ Inline Query.
-    عندما يختار المستخدم محادثة من Chat Picker،
-    يُرسل هذا المعالج رسالة الدعوة مع زر 'انضم للعبة'.
+    ترسل رسالة دعوة مع زر URL يوجّه المدعو للبوت برابط start=GAMEID
+    بحيث البوت يفتح WebApp بهوية المدعو الصحيحة.
     """
     query = update.inline_query
-    gid   = (query.query or "").strip()
+    gid   = (query.query or "").strip().upper()
 
     if not gid or gid not in games:
-        # إنشاء لعبة جديدة إذا لم يكن الـ ID صحيحاً
         user = query.from_user
         gid  = create_game(str(user.id), user.first_name)
 
-    user     = query.from_user
-    game_url = (
-        f"{WEBAPP_URL}/chess"
-        f"?game_id={gid}"
-        f"&player_id={user.id}"
-        f"&player_name={user.first_name}"
-    )
+    user = query.from_user
+    invite_link = f"https://t.me/{BOT_USERNAME}?start={gid}"
 
     result = InlineQueryResultArticle(
         id=gid,
-        title="🎮 دعوة للعب شطرنج",
-        description=f"انقر لإرسال دعوة لعبة شطرنج إلى هذه المحادثة!",
+        title="♟️ دعوة لعب شطرنج",
+        description="انقر لإرسال دعوة شطرنج إلى هذه المحادثة!",
         input_message_content=InputTextMessageContent(
             message_text=(
-                f"♟️ *{user.first_name}* يريد اللعب معك!\n\n"
-                f"🎮 دعوة لعبة شطرنج\n"
+                f"♟️ *{user.first_name}* يتحداك بالشطرنج\\!\n\n"
                 f"⏱ الوقت: دقيقة لكل لاعب\n"
                 f"🎲 الألوان: عشوائية\n\n"
-                f"اضغط الزر أدناه للانضمام!"
+                f"اضغط الزر أدناه للانضمام مباشرة\\! 👇"
             ),
-            parse_mode="Markdown",
+            parse_mode="MarkdownV2",
         ),
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton(
-                "♟️ انضم للعبة",
-                web_app=WebAppInfo(url=game_url),
+                "♟️ انضم للعبة الآن",
+                url=invite_link,
             )
         ]]),
     )
@@ -791,12 +806,10 @@ async def bot_main():
 # ============================================================
 
 if __name__ == "__main__":
-    # تشغيل Flask في خلفية (لـ UptimeRobot + Mini App)
     t = threading.Thread(target=run_flask, daemon=True)
     t.start()
     logger.info(f"🌐 خادم الويب يعمل على المنفذ {PORT}")
 
-    # تشغيل البوت في الخيط الرئيسي
     try:
         asyncio.run(bot_main())
     except (KeyboardInterrupt, SystemExit):
