@@ -22,6 +22,7 @@ import time
 import copy
 import asyncio
 import logging
+from urllib.parse import quote
 
 from flask import Flask, request, jsonify, render_template_string
 from telegram import (
@@ -347,8 +348,8 @@ tg.ready(); tg.expand();
 
 const params   = new URLSearchParams(location.search);
 const gameId   = params.get("game_id") || "";
-const myId     = String(params.get("player_id") || tg?.initDataUnsafe?.user?.id || "");
-const myName   = params.get("player_name") || tg?.initDataUnsafe?.user?.first_name || "أنت";
+const myId     = String(tg?.initDataUnsafe?.user?.id || params.get("player_id") || "");
+const myName   = tg?.initDataUnsafe?.user?.first_name || decodeURIComponent(params.get("player_name") || "") || "أنت";
 
 const PIECES = {
   wK:"♔",wQ:"♕",wR:"♖",wB:"♗",wN:"♘",wP:"♙",
@@ -369,10 +370,18 @@ async function poll() {
     const d = await r.json();
     if (d.error) { setStatus(d.error, ""); return; }
 
+    // منع الشخص الثالث من الدخول
+    const isPlayer = d.players.w === myId || d.players.b === myId;
+    if (!isPlayer && d.status !== "waiting") {
+      setStatus("⛔ اللعبة ممتلئة! لا يمكنك الانضمام.", "gameover");
+      return;
+    }
+
     const changed = !state
       || JSON.stringify(d.board) !== JSON.stringify(state?.board)
       || d.status !== state?.status
-      || d.players.b !== state?.players?.b;
+      || d.players.b !== state?.players?.b
+      || d.names.b !== state?.names?.b;
 
     state = d;
 
@@ -430,9 +439,10 @@ function render() {
     }
   }
 
-  const oppColor = myColor === "w" ? "b" : "w";
-  document.getElementById("me-name").textContent  = state.names[myColor  || "w"] || "أنت";
-  document.getElementById("opp-name").textContent = state.names[oppColor || "b"] || "اللاعب الثاني";
+  const mc  = myColor || "w";
+  const opp = mc === "w" ? "b" : "w";
+  document.getElementById("me-name").textContent  = state.names[mc]  || myName || "أنت";
+  document.getElementById("opp-name").textContent = state.names[opp] || "في انتظار الخصم…";
 }
 
 function onClick(e) {
@@ -655,7 +665,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{WEBAPP_URL}/chess"
             f"?game_id={gid}"
             f"&player_id={user.id}"
-            f"&player_name={user.first_name}"
+            f"&player_name={quote(user.first_name)}"
         )
 
         creator_name = game["names"]["w"]
@@ -700,22 +710,16 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = q.from_user
         gid  = create_game(str(user.id), user.first_name)
 
+        invite_link = f"https://t.me/{BOT_USERNAME}?start={gid}"
+        share_url   = f"https://t.me/share/url?url={invite_link}&text={user.first_name}+يتحداك+بالشطرنج!"
+
         kb = [[
-            InlineKeyboardButton(
-                "📨 شارك الدعوة مع صديق",
-                switch_inline_query_chosen_chat=SwitchInlineQueryChosenChat(
-                    query=gid,
-                    allow_user_chats=True,
-                    allow_bot_chats=False,
-                    allow_group_chats=True,
-                    allow_channel_chats=False,
-                ),
-            )
+            InlineKeyboardButton("📨 شارك الدعوة مع صديق", url=share_url)
         ], [
             InlineKeyboardButton(
                 "▶️ افتح لعبتي أنا",
                 web_app=WebAppInfo(
-                    url=f"{WEBAPP_URL}/chess?game_id={gid}&player_id={user.id}&player_name={user.first_name}"
+                    url=f"{WEBAPP_URL}/chess?game_id={gid}&player_id={user.id}&player_name={quote(user.first_name)}"
                 ),
             )
         ]]
@@ -725,8 +729,8 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{label}\n\n"
             f"👤 المنشئ: {user.first_name}\n"
             f"⏱ الوقت: دقيقة لكل لاعب\n\n"
-            f"📩 اضغط «شارك الدعوة» لإرسالها لصديقك،\n"
-            f"أو افتح لعبتك أنت وانتظره!",
+            f"📩 اضغط «شارك الدعوة» ثم اختر صديقك\n"
+            f"عند ضغطه على الرابط يدخل اللعبة مباشرة من البوت!",
             reply_markup=InlineKeyboardMarkup(kb),
             parse_mode="Markdown",
         )
@@ -754,12 +758,11 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         description="انقر لإرسال دعوة شطرنج إلى هذه المحادثة!",
         input_message_content=InputTextMessageContent(
             message_text=(
-                f"♟️ *{user.first_name}* يتحداك بالشطرنج\\!\n\n"
+                f"♟️ {user.first_name} يتحداك بالشطرنج!\n\n"
                 f"⏱ الوقت: دقيقة لكل لاعب\n"
                 f"🎲 الألوان: عشوائية\n\n"
-                f"اضغط الزر أدناه للانضمام مباشرة\\! 👇"
+                f"اضغط الزر أدناه للانضمام مباشرة! 👇"
             ),
-            parse_mode="MarkdownV2",
         ),
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton(
